@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>レッスン会員管理</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --sf-navy:      #16325C;
+  --sf-blue:      #0070D2;
+  --sf-blue-dark: #005FB2;
+  --sf-blue-light:#E8F4FF;
+  --sf-bg:        #F3F2F2;
+  --sf-white:     #FFFFFF;
+  --sf-border:    #DDDBDA;
+  --sf-text:      #080707;
+  --sf-text-2:    #3E3E3C;
+  --sf-text-3:    #706E6B;
+  --sf-success:   #2E844A;
+  --sf-success-bg:#EEF6EB;
+  --sf-warning:   #DD7A01;
+  --sf-warning-bg:#FFF3E0;
+  --sf-error:     #BA0517;
+  --sf-error-bg:  #FDECEA;
+  --sf-hover:     #F3F2F2;
+  --sf-active:    #E8F4FF;
+}
+
+body {
+  font-family: -apple-system, 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', sans-serif;
+  background: var(--sf-bg);
+  color: var(--sf-text);
+  min-height: 100vh;
+  font-size: 14px;
+}
+
+/* ── Header ── */
+header {
+  background: var(--sf-navy);
+  color: var(--sf-white);
+  height: 52px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: 0 2px 4px rgba(0,0,0,.3);
+}
+.header-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.header-logo .icon {
+  width: 32px;
+  height: 32px;
+  background: var(--sf-blue);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+.header-logo h1 {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.header-logo .sub {
+  font-size: 11px;
+  color: rgba(255,255,255,.6);
+  margin-top: 1px;
+}
+.header-actions { display: flex; gap: 8px; align-items: center; }
+.btn-header {
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.25);
+  color: var(--sf-white);
+  padding: 5px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s;
+}
+.btn-header:hover { background: rgba(255,255,255,.2); }
+
+/* ── Banner ── */
+#urlBanner {
+  display: none;
+  background: var(--sf-warning-bg);
+  border-bottom: 2px solid var(--sf-warning);
+  padding: 8px 16px;
+  font-size: 12px;
+  color: #5A3E00;
+}
+#urlBanner.show { display: block; }
+
+/* ── Loading ── */
+#loadingOverlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(243,242,242,.8);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--sf-text-3);
+}
+#loadingOverlay.show { display: flex; }
+.spinner {
+  width: 28px; height: 28px;
+  border: 3px solid var(--sf-border);
+  border-top-color: var(--sf-blue);
+  border-radius: 50%;
+  animation: spin .65s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Toast ── */
+#toast {
+  position: fixed;
+  bottom: 24px; left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: #333;
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  z-index: 300;
+  transition: transform .25s ease;
+  pointer-events: none;
+}
+#toast.show { transform: translateX(-50%) translateY(0); }
+
+/* ── Layout ── */
+.app {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  height: calc(100vh - 52px);
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  background: var(--sf-white);
+  border-right: 1px solid var(--sf-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Tabs */
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--sf-border);
+  background: var(--sf-white);
+}
+.sidebar-tab {
+  flex: 1;
+  padding: 11px 0;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sf-text-3);
+  cursor: pointer;
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: none;
+  font-family: inherit;
+  transition: all .15s;
+}
+.sidebar-tab.active {
+  color: var(--sf-blue);
+  border-bottom-color: var(--sf-blue);
+}
+.sidebar-tab:hover:not(.active) { color: var(--sf-text-2); background: var(--sf-hover); }
+
+/* Today panel */
+#panelToday { flex: 1; overflow-y: auto; }
+.today-header { padding: 14px 16px 8px; border-bottom: 1px solid var(--sf-border); }
+.today-date   { font-size: 11px; color: var(--sf-text-3); margin-bottom: 2px; }
+.today-title  { font-size: 14px; font-weight: 700; color: var(--sf-text); }
+.today-cards  { padding: 8px 12px 12px; }
+.today-card {
+  background: var(--sf-white);
+  border: 1px solid var(--sf-border);
+  border-left: 4px solid var(--sf-blue);
+  border-radius: 4px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.today-card-info .tc-name { font-size: 14px; font-weight: 700; color: var(--sf-text); }
+.today-card-info .tc-meta { font-size: 11px; color: var(--sf-text-3); margin-top: 2px; }
+.tc-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin-top: 5px;
+}
+.tc-badge.ok  { background: var(--sf-success-bg); color: var(--sf-success); }
+.tc-badge.low { background: var(--sf-error-bg);   color: var(--sf-error); }
+.today-empty  { padding: 32px 16px; text-align: center; color: var(--sf-text-3); font-size: 13px; }
+
+/* Member list panel */
+#panelMembers { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+.list-toolbar {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--sf-border);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.list-search {
+  flex: 1;
+  padding: 6px 10px 6px 28px;
+  border: 1px solid var(--sf-border);
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--sf-text);
+  background: var(--sf-white) url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23706E6B' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='M21 21l-4.35-4.35'/%3E%3C/svg%3E") 8px center/14px no-repeat;
+  outline: none;
+  font-family: inherit;
+}
+.list-search:focus { border-color: var(--sf-blue); box-shadow: 0 0 0 3px rgba(0,112,210,.15); }
+.btn-new {
+  background: var(--sf-blue);
+  color: var(--sf-white);
+  border: none;
+  border-radius: 4px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: inherit;
+}
+.btn-new:hover { background: var(--sf-blue-dark); }
+
+.member-list { flex: 1; overflow-y: auto; }
+.member-row {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--sf-border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  transition: background .1s;
+  position: relative;
+}
+.member-row:hover { background: var(--sf-hover); }
+.member-row.active { background: var(--sf-active); border-left: 3px solid var(--sf-blue); }
+.member-row.rem-zero { background: var(--sf-error-bg); }
+.member-row.rem-zero:hover { background: #fce4e6; }
+.mr-left { min-width: 0; flex: 1; }
+.mr-name  { font-size: 13px; font-weight: 600; color: var(--sf-text); }
+.mr-email { font-size: 11px; color: var(--sf-text-3); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mr-rem   { font-size: 11px; color: var(--sf-text-3); margin-top: 2px; }
+.mr-rem.low  { color: var(--sf-warning); font-weight: 600; }
+.mr-rem.zero { color: var(--sf-error);   font-weight: 700; }
+.mr-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.plan-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 12px;
+  background: var(--sf-blue-light);
+  color: var(--sf-blue);
+  white-space: nowrap;
+}
+.mr-use-btn {
+  display: none;
+  background: var(--sf-blue);
+  color: var(--sf-white);
+  border: none;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.member-row:hover .mr-use-btn { display: inline-block; }
+.mr-use-btn:hover { background: var(--sf-blue-dark); }
+.mr-use-btn:disabled { opacity:.4; cursor:not-allowed; }
+
+/* ── Detail Panel ── */
+.detail {
+  overflow-y: auto;
+  background: var(--sf-bg);
+}
+.empty-state {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--sf-text-3);
+  gap: 12px;
+}
+.empty-state svg { opacity: .25; }
+
+/* Record header */
+.record-header {
+  background: var(--sf-white);
+  border-bottom: 1px solid var(--sf-border);
+  padding: 16px 24px 0;
+}
+.record-breadcrumb {
+  font-size: 11px;
+  color: var(--sf-text-3);
+  margin-bottom: 6px;
+}
+.record-breadcrumb button {
+  background: none;
+  border: none;
+  color: var(--sf-blue);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+  font-family: inherit;
+}
+.record-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.record-title h2 { font-size: 20px; font-weight: 700; color: var(--sf-text); }
+.record-title p  { font-size: 12px; color: var(--sf-text-3); margin-top: 3px; }
+.record-actions  { display: flex; gap: 8px; flex-shrink: 0; }
+
+/* Highlights bar — hero layout */
+.highlights {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid var(--sf-border);
+  margin: 0 -24px;
+}
+/* Hero: remaining */
+.highlight-hero {
+  padding: 16px 24px;
+  border-right: 1px solid var(--sf-border);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.highlight-hero.zero-rem { background: var(--sf-error-bg); }
+.highlight-hero.low-rem  { background: #fff8f0; }
+.hi-label { font-size: 10px; font-weight: 600; color: var(--sf-text-3); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+.hi-value { font-size: 48px; font-weight: 800; color: var(--sf-navy); line-height: 1; }
+.hi-value.red  { color: var(--sf-error); }
+.hi-value.warn { color: var(--sf-warning); }
+.hi-value.blue { color: var(--sf-blue); }
+.hi-unit  { font-size: 18px; font-weight: 600; color: var(--sf-text-3); margin-left: 4px; }
+.hi-sub   { font-size: 11px; color: var(--sf-text-3); margin-top: 6px; }
+/* Sub stats grid */
+.highlight-sub-grid {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+}
+.highlight-item {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--sf-border);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.highlight-item:last-child { border-bottom: none; }
+.hi-value-sm { font-size: 20px; font-weight: 800; color: var(--sf-navy); line-height: 1; margin-top: 3px; }
+
+/* Inline edit for remaining */
+.hi-edit-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+.hi-edit-btn {
+  background: none;
+  border: none;
+  color: var(--sf-text-3);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 1;
+}
+.hi-edit-btn:hover { background: var(--sf-border); color: var(--sf-blue); }
+.hi-inline-form {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: center;
+  margin-top: 4px;
+}
+.hi-inline-input {
+  width: 56px;
+  padding: 3px 6px;
+  border: 1px solid var(--sf-blue);
+  border-radius: 4px;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--sf-text);
+  font-family: inherit;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0,112,210,.15);
+}
+.hi-save-btn, .hi-cancel-btn {
+  background: none; border: none; cursor: pointer; padding: 3px 5px; border-radius: 3px; font-size: 13px;
+}
+.hi-save-btn   { color: var(--sf-success); }
+.hi-save-btn:hover   { background: var(--sf-success-bg); }
+.hi-cancel-btn { color: var(--sf-error); }
+.hi-cancel-btn:hover { background: var(--sf-error-bg); }
+
+/* Record body */
+.record-body { padding: 16px 24px; display: flex; flex-direction: column; gap: 16px; }
+
+/* Alert banner */
+.alert-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 4px;
+  font-size: 13px;
+  border: 1px solid;
+}
+.alert-banner.warning { background: var(--sf-warning-bg); border-color: var(--sf-warning); color: #5A3E00; }
+
+/* Action bar */
+.action-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.btn-primary {
+  background: var(--sf-blue);
+  color: var(--sf-white);
+  border: 1px solid var(--sf-blue);
+  border-radius: 4px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s;
+}
+.btn-primary:hover { background: var(--sf-blue-dark); border-color: var(--sf-blue-dark); }
+.btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+.btn-outline {
+  background: var(--sf-white);
+  color: var(--sf-blue);
+  border: 1px solid var(--sf-blue);
+  border-radius: 4px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s;
+}
+.btn-outline:hover { background: var(--sf-blue-light); }
+.btn-ghost {
+  background: var(--sf-white);
+  color: var(--sf-text-2);
+  border: 1px solid var(--sf-border);
+  border-radius: 4px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn-ghost:hover { background: var(--sf-hover); }
+
+/* Section card */
+.sf-card {
+  background: var(--sf-white);
+  border: 1px solid var(--sf-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.sf-card-header {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--sf-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sf-card-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--sf-text-2);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.sf-card-body { padding: 16px; }
+
+/* Field grid */
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 24px;
+}
+.field-item label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sf-text-3);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 3px;
+}
+.field-item .fv {
+  font-size: 14px;
+  color: var(--sf-text);
+  word-break: break-all;
+}
+.field-item .fv.note-text { font-size: 12px; color: var(--sf-text-2); }
+
+/* Stats row */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.stat-box {
+  background: var(--sf-bg);
+  border: 1px solid var(--sf-border);
+  border-radius: 4px;
+  padding: 14px;
+  text-align: center;
+}
+.stat-box .sv { font-size: 24px; font-weight: 800; color: var(--sf-navy); line-height: 1; }
+.stat-box .sl { font-size: 10px; color: var(--sf-text-3); margin-top: 4px; text-transform: uppercase; letter-spacing: .06em; }
+
+/* Period table */
+.sf-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.sf-table th {
+  background: var(--sf-bg);
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--sf-text-3);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  border-bottom: 1px solid var(--sf-border);
+}
+.sf-table th:not(:first-child) { text-align: center; }
+.sf-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--sf-border);
+  color: var(--sf-text-2);
+  text-align: center;
+}
+.sf-table td:first-child { text-align: left; color: var(--sf-text-3); font-size: 12px; }
+.sf-table tr:last-child td { border-bottom: none; }
+.sf-table tr.cur-row td { background: var(--sf-blue-light); color: var(--sf-text); font-weight: 600; }
+.sf-table tr.cur-row td:first-child { color: var(--sf-blue); }
+.mini-dots { display: inline-flex; gap: 3px; align-items: center; }
+.dot-used  { width: 9px; height: 9px; border-radius: 2px; background: var(--sf-blue); }
+.dot-empty { width: 9px; height: 9px; border-radius: 2px; background: var(--sf-border); }
+.carry-pill {
+  display: inline-block;
+  font-size: 10px;
+  background: var(--sf-blue-light);
+  color: var(--sf-blue);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-weight: 600;
+}
+
+/* Lesson history */
+.lesson-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--sf-border);
+}
+.lesson-row:last-child { border-bottom: none; }
+.lr-note { font-size: 13px; font-weight: 500; color: var(--sf-text); }
+.lr-date { font-size: 11px; color: var(--sf-text-3); margin-top: 2px; }
+.tag-lesson {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--sf-blue-light);
+  color: var(--sf-blue);
+  flex-shrink: 0;
+}
+
+/* Modal */
+.modal-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.5);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.show { display: flex; }
+.sf-modal {
+  background: var(--sf-white);
+  border-radius: 4px;
+  width: 420px;
+  max-width: 95vw;
+  box-shadow: 0 8px 32px rgba(0,0,0,.25);
+  overflow: hidden;
+}
+.sf-modal-header {
+  background: var(--sf-navy);
+  color: var(--sf-white);
+  padding: 14px 20px;
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sf-modal-close {
+  background: none; border: none; color: rgba(255,255,255,.7); cursor: pointer; font-size: 18px; line-height: 1;
+}
+.sf-modal-close:hover { color: #fff; }
+.sf-modal-body { padding: 20px; }
+.sf-modal-footer {
+  padding: 12px 20px;
+  background: var(--sf-bg);
+  border-top: 1px solid var(--sf-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.form-group { margin-bottom: 14px; }
+.form-group label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sf-text-3);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 5px;
+}
+.form-group input, .form-group select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--sf-border);
+  border-radius: 4px;
+  font-size: 14px;
+  color: var(--sf-text);
+  font-family: inherit;
+  outline: none;
+}
+.form-group input:focus, .form-group select:focus {
+  border-color: var(--sf-blue);
+  box-shadow: 0 0 0 3px rgba(0,112,210,.15);
+}
+.btn-cancel {
+  background: var(--sf-white);
+  color: var(--sf-text-2);
+  border: 1px solid var(--sf-border);
+  border-radius: 4px;
+  padding: 8px 18px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn-cancel:hover { background: var(--sf-hover); }
+
+/* Responsive */
+.back-btn {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--sf-blue);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0 0 12px;
+  font-family: inherit;
+}
+
+@media (max-width: 700px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar {
+    position: absolute;
+    inset: 52px 0 0 0;
+    z-index: 10;
+    transition: transform .25s;
+  }
+  .sidebar.hidden-mobile { transform: translateX(-100%); pointer-events: none; }
+  .detail {
+    position: absolute;
+    inset: 52px 0 0 0;
+    transform: translateX(100%);
+    transition: transform .25s;
+  }
+  .detail.visible-mobile { transform: translateX(0); }
+  .back-btn { display: flex; }
+  .highlights { flex-wrap: wrap; }
+  .highlight-item { min-width: 50%; }
+  .field-grid { grid-template-columns: 1fr; }
+  .stats-row { grid-template-columns: repeat(3,1fr); }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-logo">
+    <div class="icon">⛳</div>
+    <div>
+      <h1>レッスン会員管理</h1>
+      <div class="sub">Lesson Member Manager</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <button class="btn-header" onclick="fetchData()">↺ 更新</button>
+  </div>
+</header>
+
+<div id="urlBanner">⚠ GAS Web App URLが未設定です。右上「⚙ URL設定」から入力してください。オフラインデータを表示中。</div>
+<div id="loadingOverlay"><div class="spinner"></div><span id="loadingText">読み込み中...</span></div>
+<div id="toast"></div>
+
+<div class="app">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-tabs">
+      <button class="sidebar-tab active" id="tabToday"   onclick="switchTab('today')">今日のレッスン</button>
+      <button class="sidebar-tab"        id="tabMembers" onclick="switchTab('members')">会員一覧</button>
+    </div>
+    <div id="panelToday"></div>
+    <div id="panelMembers">
+      <div class="list-toolbar">
+        <input class="list-search" type="text" id="search" placeholder="会員を検索..." oninput="renderList()">
+        <button class="btn-new" onclick="openAddModal()">＋ 新規</button>
+      </div>
+      <div class="member-list" id="memberList"></div>
+    </div>
+  </div>
+
+  <!-- Detail -->
+  <div class="detail" id="detail">
+    <div class="empty-state">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#16325C" stroke-width="1.2">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+      </svg>
+      <p style="font-size:13px;">左のリストから会員を選択してください</p>
+    </div>
+  </div>
+</div>
+
+<!-- Add Member Modal -->
+<div class="modal-overlay" id="addModal">
+  <div class="sf-modal">
+    <div class="sf-modal-header">
+      新しい会員を追加
+      <button class="sf-modal-close" onclick="closeAddModal()">✕</button>
+    </div>
+    <div class="sf-modal-body">
+      <div class="form-group"><label>お名前 *</label><input type="text" id="newName" placeholder="山田 花子"></div>
+      <div class="form-group"><label>メールアドレス *</label><input type="email" id="newEmail" placeholder="yamada@example.com"></div>
+      <div class="form-group">
+        <label>プラン（月あたりの回数）</label>
+        <select id="newPlan">
+          <option value="0">レッスンパック（月次付与なし）</option>
+          <option value="2">月2回</option>
+          <option value="3">月3回</option>
+          <option value="4" selected>月4回</option>
+          <option value="6">月6回</option>
+          <option value="8">月8回</option>
+        </select>
+      </div>
+      <div class="form-group"><label>契約開始日 *</label><input type="date" id="newStartDate"></div>
+      <div class="form-group"><label>備考</label><input type="text" id="newNote" placeholder="任意"></div>
+    </div>
+    <div class="sf-modal-footer">
+      <button class="btn-cancel" onclick="closeAddModal()">キャンセル</button>
+      <button class="btn-primary" onclick="submitAddMember()">追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Member Modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="sf-modal">
+    <div class="sf-modal-header">
+      会員情報を編集
+      <button class="sf-modal-close" onclick="closeEditModal()">✕</button>
+    </div>
+    <div class="sf-modal-body">
+      <div class="form-group"><label>お名前 *</label><input type="text" id="editName"></div>
+      <div class="form-group"><label>メールアドレス *</label><input type="email" id="editEmail"></div>
+      <div class="form-group">
+        <label>プラン（月あたりの回数）</label>
+        <select id="editPlan">
+          <option value="0">レッスンパック（月次付与なし）</option>
+          <option value="2">月2回</option>
+          <option value="3">月3回</option>
+          <option value="4">月4回</option>
+          <option value="6">月6回</option>
+          <option value="8">月8回</option>
+        </select>
+      </div>
+      <div class="form-group"><label>契約開始日 *</label><input type="date" id="editStartDate"></div>
+      <div class="form-group"><label>備考</label><input type="text" id="editNote"></div>
+    </div>
+    <div class="sf-modal-footer">
+      <button class="btn-cancel" onclick="closeEditModal()">キャンセル</button>
+      <button class="btn-primary" onclick="submitEditMember()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Supabase 設定 ─────────────────────────────────────────────
+const SUPABASE_URL = 'https://bzfllrmvxtxqupobetub.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ6Zmxscm12eHR4cXVwb2JldHViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3ODc0NjUsImV4cCI6MjEwMDM2MzQ2NX0.dl87C_axEcZmkcBEZdj2F_G-IFpJAaoGMrRuGCxUlw8';
+const SB_HEADERS = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
+
+async function sbGet(table, params='') {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, { headers: SB_HEADERS });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+async function sbPost(table, body) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, { method:'POST', headers: SB_HEADERS, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+async function sbPatch(table, id, body) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, { method:'PATCH', headers: SB_HEADERS, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+// ── State ─────────────────────────────────────────────────────
+let members = [], lessons = [], selectedId = null;
+
+// Supabase snake_case → camelCase
+function normMember(r) { return { id:r.id, name:r.name, email:r.email, plan:r.plan||0, startDate:r.start_date, carryOver:r.carry_over||0, note:r.note||'' }; }
+function normLesson(r)  { return { id:r.id, date:r.date, memberId:r.member_id, name:r.name, email:r.email, calendar:r.calendar||'', note:r.note||'' }; }
+
+// ── Helpers ──────────────────────────────────────────────────
+function toDateStr(d) { return d.toISOString().split('T')[0]; }
+function parseDate(s) { const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
+function addMonths(s,n) { const d=parseDate(s); d.setMonth(d.getMonth()+n); return toDateStr(d); }
+function formatDate(s) {
+  const d=parseDate(s);
+  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function showToast(msg, ms=2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), ms);
+}
+
+// ── Period Calculator ─────────────────────────────────────────
+function computePeriods(member, allLessons, today) {
+  const todayStr = toDateStr(today || new Date());
+  const periods = [];
+  let ps = member.startDate;
+  while (ps <= todayStr) {
+    const pe = addMonths(ps, 1);
+    const pl = allLessons.filter(l =>
+      l.email.toLowerCase() === member.email.toLowerCase() && l.date >= ps && l.date < pe);
+    const isFirst = periods.length === 0;
+    const carryIn = isFirst ? (member.carryOver||0) : Math.max(0, periods[periods.length-1].allotted - periods[periods.length-1].used);
+    const allotted = member.plan + carryIn;
+    const used = pl.length;
+    periods.push({ start:ps, end:pe, allotted, carryIn, used, remaining:Math.max(0,allotted-used), lessons:pl });
+    ps = pe;
+  }
+  return periods;
+}
+function getCurrentPeriod(member) { const p=computePeriods(member,lessons,new Date()); return p[p.length-1]; }
+function getTotalRemaining(member) { const c=getCurrentPeriod(member); return c?c.remaining:0; }
+function getNextRenewal(member) {
+  const today=new Date(); let d=member.startDate;
+  while (addMonths(d,1)<=toDateStr(today)) d=addMonths(d,1);
+  return addMonths(d,1);
+}
+
+// ── Loading / Fetch ───────────────────────────────────────────
+function showLoading(msg) { document.getElementById('loadingText').textContent=msg||'読み込み中...'; document.getElementById('loadingOverlay').classList.add('show'); }
+function hideLoading() { document.getElementById('loadingOverlay').classList.remove('show'); }
+
+async function fetchData() {
+  showLoading('データを読み込み中...');
+  try {
+    const [mRows, lRows] = await Promise.all([
+      sbGet('members', 'order=id.asc'),
+      sbGet('lessons', 'order=date.desc')
+    ]);
+    members = mRows.map(normMember);
+    lessons  = lRows.map(normLesson);
+    renderList(); renderToday(); if (selectedId) renderDetail();
+  } catch(e) {
+    console.error(e);
+    const b = document.getElementById('urlBanner');
+    b.textContent = '⚠ データ取得に失敗しました。ネットワークを確認してください。';
+    b.classList.add('show');
+  } finally { hideLoading(); }
+}
+
+// ── Tab Switch ────────────────────────────────────────────────
+let currentTab = 'today';
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('tabToday').classList.toggle('active', tab==='today');
+  document.getElementById('tabMembers').classList.toggle('active', tab==='members');
+  document.getElementById('panelToday').style.display   = tab==='today'   ? '' : 'none';
+  document.getElementById('panelMembers').style.display = tab==='members' ? 'flex' : 'none';
+  if (tab==='today') renderToday();
+}
+
+// ── Today View ────────────────────────────────────────────────
+function renderToday() {
+  const el = document.getElementById('panelToday');
+  const todayStr = toDateStr(new Date());
+  const d = new Date();
+  const dateLabel = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${'日月火水木金土'[d.getDay()]}）`;
+
+  // カレンダー連携済み：当日の予約
+  const todayLessons = lessons.filter(l=>l.date===todayStr);
+  const seen = new Set(), todayMembers = [];
+  for (const l of todayLessons) {
+    if (!seen.has(l.email)) {
+      seen.add(l.email);
+      const m = members.find(m=>m.email.toLowerCase()===l.email.toLowerCase());
+      if (m) todayMembers.push({member:m, lesson:l, fromCal:true});
+    }
+  }
+
+  // カレンダーデータなし → 残数がある全会員を残数少ない順で表示
+  const useAllMembers = todayMembers.length === 0;
+  let displayList = todayMembers;
+  if (useAllMembers) {
+    displayList = members
+      .map(m=>({ member:m, lesson:null, fromCal:false }))
+      .filter(({member:m})=>getTotalRemaining(m)>0)
+      .sort((a,b)=>getTotalRemaining(a.member)-getTotalRemaining(b.member));
+  }
+
+  let html = `<div class="today-header">
+    <div class="today-date">${dateLabel}</div>
+    <div class="today-title">${useAllMembers?'残数あり会員（残数少ない順）':'本日のレッスン'}</div>
+  </div><div class="today-cards">`;
+
+  if (!displayList.length) {
+    html += `<div class="today-empty">${useAllMembers?'残数がある会員はいません':'本日の予約はありません'}</div>`;
+  } else {
+    html += displayList.map(({member:m, lesson:l})=>{
+      const rem = getTotalRemaining(m);
+      const bc = rem<=1?'low':'ok';
+      const bt = rem<=0?'残り0回':`残り ${rem} 回`;
+      const meta = l ? `${l.calendar||''}　${l.note||''}` : `${m.plan===0?'パック':`月${m.plan}回`}`;
+      const usedToday = lessons.some(x=>x.email.toLowerCase()===m.email.toLowerCase()&&x.date===todayStr);
+      return `<div class="today-card" style="${usedToday?'border-left-color:var(--sf-success)':''}">
+        <div class="today-card-info">
+          <div class="tc-name">${m.name}${usedToday?' <span style="font-size:10px;color:var(--sf-success);font-weight:700">✓使用済</span>':''}</div>
+          <div class="tc-meta">${meta}</div>
+          <span class="tc-badge ${bc}">${bt}</span>
+        </div>
+        <button class="btn-primary" style="padding:6px 12px;font-size:12px;" onclick="useLessonToday(${m.id})" ${rem<=0?'disabled':''}>使用</button>
+      </div>`;
+    }).join('');
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+async function useLessonToday(id) {
+  const m = members.find(m=>m.id===id); if (!m) return;
+  const todayStr = toDateStr(new Date());
+  const dup = lessons.some(l=>l.email.toLowerCase()===m.email.toLowerCase()&&l.date===todayStr);
+  if (dup && !confirm(`${m.name} は本日すでに記録があります。追加しますか？`)) return;
+  showLoading('保存中...');
+  try {
+    await sbPost('lessons', {date:todayStr, member_id:m.id, name:m.name, email:m.email, calendar:'手動', note:'当日使用'});
+    await fetchData(); showToast(`✓ ${m.name} のレッスンを記録しました`);
+  } catch(e) { console.error(e); showToast('⚠ 保存に失敗しました'); } finally { hideLoading(); }
+}
+
+// ── Render List ───────────────────────────────────────────────
+function renderList() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const el = document.getElementById('memberList');
+  el.innerHTML = '';
+  const filtered = members.filter(m=>m.name.toLowerCase().includes(q)||m.email.toLowerCase().includes(q));
+  if (!filtered.length) { el.innerHTML='<div style="padding:20px;text-align:center;color:var(--sf-text-3);font-size:13px;">見つかりません</div>'; return; }
+  filtered.forEach(m=>{
+    const rem = getTotalRemaining(m);
+    const remCls = rem===0?'zero':rem<=2?'low':'';
+    const rowCls = rem===0?'rem-zero':'';
+    const div = document.createElement('div');
+    div.className = 'member-row' + (m.id===selectedId?' active':'') + (rowCls?' '+rowCls:'');
+    div.onclick = (e)=>{ if(e.target.classList.contains('mr-use-btn')) return; selectMember(m.id); };
+    div.innerHTML = `<div class="mr-left">
+      <div class="mr-name">${m.name}</div>
+      <div class="mr-email">${m.email}</div>
+      <div class="mr-rem ${remCls}">残り <strong>${rem}</strong> 回</div>
+    </div>
+    <div class="mr-right">
+      <button class="mr-use-btn" onclick="quickUse(${m.id},event)" ${rem<=0?'disabled':''}>−1</button>
+      <span class="plan-pill">${m.plan===0?'パック':`月${m.plan}回`}</span>
+    </div>`;
+    el.appendChild(div);
+  });
+}
+
+// ── Select / Detail ───────────────────────────────────────────
+function selectMember(id) { selectedId=id; renderList(); renderDetail(); }
+
+function renderDetail() {
+  const member = members.find(m=>m.id===selectedId); if (!member) return;
+  const today = new Date();
+  const cur = getCurrentPeriod(member);
+  const remaining = getTotalRemaining(member);
+  const nextRenewal = getNextRenewal(member);
+  const daysToRenew = Math.ceil((parseDate(nextRenewal)-today)/86400000);
+
+  const allPeriods = computePeriods(member,lessons,new Date());
+  const totalMonths = allPeriods.length;
+  const totalUsed = allPeriods.reduce((s,p)=>s+p.used,0);
+  const totalAllotted = allPeriods.reduce((s,p)=>s+member.plan,0);
+  const usageRate = totalAllotted>0 ? Math.round(totalUsed/totalAllotted*100) : 0;
+
+  const periodRows = [...allPeriods].reverse().map(p=>{
+    const isCur = p.start===allPeriods[allPeriods.length-1].start;
+    const dots = Array.from({length:Math.min(p.allotted,20)},(_,i)=>
+      `<span class="${i<p.used?'dot-used':'dot-empty'}"></span>`).join('');
+    const carryOut = Math.max(0,p.allotted-p.used);
+    const tail = !isCur && carryOut>0 ? `<span class="carry-pill">繰越${carryOut}</span>` : '';
+    return `<tr class="${isCur?'cur-row':''}">
+      <td>${formatDate(p.start).slice(0,7).replace('/','-')}</td>
+      <td>${p.allotted}回${p.carryIn>0?`<br><small style="color:var(--sf-text-3);font-weight:400">持越+${p.carryIn}</small>`:''}</td>
+      <td>${p.used}回</td>
+      <td><div class="mini-dots">${dots}</div></td>
+      <td>${isCur?`<strong>${p.remaining}</strong>`: tail||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const memberLessons = lessons
+    .filter(l=>l.email.toLowerCase()===member.email.toLowerCase())
+    .sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
+  const histHtml = memberLessons.length
+    ? memberLessons.map(l=>`<div class="lesson-row">
+        <div><div class="lr-note">${l.note||'レッスン'}</div><div class="lr-date">${formatDate(l.date)}　${l.calendar||''}</div></div>
+        <span class="tag-lesson">レッスン</span></div>`).join('')
+    : '<div style="color:var(--sf-text-3);font-size:13px;padding:8px 0;">受講履歴はありません</div>';
+
+  const remClass = remaining===0?'red':remaining<=2?'red':'';
+  const warnHtml = daysToRenew<=7
+    ? `<div class="alert-banner warning">⚠ 次回更新まであと <strong>${daysToRenew}日</strong>（${formatDate(nextRenewal)}）</div>` : '';
+
+  if (window.innerWidth<=700) {
+    document.querySelector('.sidebar').classList.add('hidden-mobile');
+    document.getElementById('detail').classList.add('visible-mobile');
+  }
+
+  document.getElementById('detail').innerHTML = `
+    <div class="record-header">
+      <div class="record-breadcrumb">
+        <button onclick="goBackToList()">← 会員一覧</button> / ${member.name}
+      </div>
+      <div class="record-title-row">
+        <div class="record-title">
+          <h2>${member.name}</h2>
+          <p>${member.email}　｜　契約開始：${formatDate(member.startDate)}　｜　${member.plan===0?'レッスンパック':`月${member.plan}回プラン`}</p>
+        </div>
+        <div class="record-actions">
+          <button class="btn-outline" onclick="openEditModal(${member.id})">✏ 編集</button>
+        </div>
+      </div>
+      <div class="highlights">
+        <div class="highlight-hero ${remaining===0?'zero-rem':remaining<=2?'low-rem':''}" id="hi-hero">
+          <div class="hi-label">残りレッスン数</div>
+          <div style="display:flex;align-items:baseline;gap:4px;">
+            <div class="hi-value ${remClass}" id="hi-remaining">${remaining}</div>
+            <span class="hi-unit">回</span>
+            <button class="hi-edit-btn" onclick="startEditRemaining(${member.id})" title="残数を直接編集" style="margin-left:6px;">✏</button>
+          </div>
+          <div class="hi-sub">${remaining===0?'⚠ 残数なし — 要確認':remaining<=2?`⚠ 残り少ない（今月使用: ${cur.used}回）`:`今月使用: ${cur.used}回 ／ 権利: ${cur.allotted}回`}</div>
+        </div>
+        <div class="highlight-sub-grid">
+          <div class="highlight-item">
+            <div class="hi-label">今月の権利数</div>
+            <div class="hi-value-sm">${cur.allotted}<span style="font-size:12px;color:var(--sf-text-3);font-weight:400;margin-left:3px;">回${cur.carryIn>0?`（持越+${cur.carryIn}）`:''}</span></div>
+          </div>
+          <div class="highlight-item">
+            <div class="hi-label">次回更新</div>
+            <div class="hi-value-sm" style="font-size:15px;">${formatDate(nextRenewal)}<span style="font-size:11px;color:var(--sf-text-3);font-weight:400;margin-left:4px;">あと${daysToRenew}日</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="record-body">
+      ${warnHtml}
+
+      <div class="action-bar">
+        <button class="btn-primary" onclick="useLesson(${member.id})" ${remaining<=0?'disabled':''}>⛳ レッスンを使用する（−1回）</button>
+        <button class="btn-ghost" onclick="fetchData()">↺ 最新データに更新</button>
+      </div>
+
+      <div class="sf-card">
+        <div class="sf-card-header"><span class="sf-card-title">会員情報</span></div>
+        <div class="sf-card-body">
+          <div class="field-grid">
+            <div class="field-item"><label>名前</label><div class="fv">${member.name}</div></div>
+            <div class="field-item"><label>メールアドレス</label><div class="fv">${member.email}</div></div>
+            <div class="field-item"><label>プラン</label><div class="fv">${member.plan===0?'レッスンパック（月次付与なし）':`月${member.plan}回`}</div></div>
+            <div class="field-item"><label>契約開始日</label><div class="fv">${formatDate(member.startDate)}</div></div>
+            <div class="field-item" style="grid-column:1/-1"><label>備考</label><div class="fv note-text">${member.note||'—'}</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sf-card">
+        <div class="sf-card-header"><span class="sf-card-title">累計サマリー</span></div>
+        <div class="sf-card-body">
+          <div class="stats-row">
+            <div class="stat-box"><div class="sv">${totalMonths}</div><div class="sl">在籍月数</div></div>
+            <div class="stat-box"><div class="sv">${totalUsed}</div><div class="sl">総受講回数</div></div>
+            <div class="stat-box"><div class="sv">${usageRate}<span style="font-size:14px;font-weight:600">%</span></div><div class="sl">平均使用率</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sf-card">
+        <div class="sf-card-header"><span class="sf-card-title">月別サマリー</span></div>
+        <table class="sf-table">
+          <thead><tr><th>期間</th><th>権利数</th><th>使用</th><th>使用状況</th><th>残/繰越</th></tr></thead>
+          <tbody>${periodRows}</tbody>
+        </table>
+      </div>
+
+      <div class="sf-card">
+        <div class="sf-card-header"><span class="sf-card-title">受講履歴（直近10件）</span></div>
+        <div class="sf-card-body" style="padding:0 16px;">${histHtml}</div>
+      </div>
+    </div>
+  `;
+}
+
+function goBackToList() {
+  document.querySelector('.sidebar').classList.remove('hidden-mobile');
+  document.getElementById('detail').classList.remove('visible-mobile');
+}
+
+// ── Inline edit: remaining count ──────────────────────────────
+function startEditRemaining(id) {
+  const member = members.find(m=>m.id===id); if (!member) return;
+  const cur = getCurrentPeriod(member);
+  const current = cur ? cur.remaining : 0;
+  const hero = document.getElementById('hi-hero');
+  hero.innerHTML = `
+    <div class="hi-label">残りレッスン数を編集</div>
+    <div class="hi-inline-form">
+      <input class="hi-inline-input" type="number" id="remainInput" value="${current}" min="0" max="99">
+      <button class="hi-save-btn" onclick="saveRemaining(${id})" title="保存">✓</button>
+      <button class="hi-cancel-btn" onclick="renderDetail()" title="キャンセル">✕</button>
+    </div>
+    <div class="hi-sub">Enterで保存 / Escでキャンセル</div>`;
+  document.getElementById('remainInput').focus();
+  document.getElementById('remainInput').select();
+  document.getElementById('remainInput').onkeydown = e => {
+    if (e.key==='Enter') saveRemaining(id);
+    if (e.key==='Escape') renderDetail();
+  };
+}
+
+async function saveRemaining(id) {
+  const member = members.find(m=>m.id===id); if (!member) return;
+  const val = parseInt(document.getElementById('remainInput')?.value);
+  if (isNaN(val)||val<0) { showToast('⚠ 正しい数値を入力してください'); return; }
+  const cur = getCurrentPeriod(member);
+  const usedThisPeriod = cur ? cur.used : 0;
+  const newCarryOver = Math.max(0, val - member.plan + usedThisPeriod);
+  showLoading('保存中...');
+  try {
+    await sbPatch('members', id, { carry_over: newCarryOver });
+    member.carryOver = newCarryOver;
+    renderDetail(); renderList();
+    showToast(`✓ 残数を ${val} 回に更新しました`);
+    fetchData();
+  } catch(e) { console.error(e); showToast('⚠ 保存に失敗しました'); } finally { hideLoading(); }
+}
+
+// ── Quick Use from list ────────────────────────────────────────
+async function quickUse(id, e) {
+  e && e.stopPropagation();
+  const member = members.find(m=>m.id===id); if (!member) return;
+  const todayStr = toDateStr(new Date());
+  const dup = lessons.some(l=>l.email.toLowerCase()===member.email.toLowerCase()&&l.date===todayStr);
+  if (dup && !confirm(`${member.name} は本日すでに記録があります。追加しますか？`)) return;
+  showLoading('保存中...');
+  try {
+    await sbPost('lessons', {date:todayStr, member_id:member.id, name:member.name, email:member.email, calendar:'手動', note:'レッスン'});
+    await fetchData(); showToast(`✓ ${member.name} のレッスンを記録しました`);
+  } catch(e) { console.error(e); showToast('⚠ 保存に失敗しました'); } finally { hideLoading(); }
+}
+
+// ── Use Lesson ────────────────────────────────────────────────
+async function useLesson(id) {
+  const member = members.find(m=>m.id===id); if (!member) return;
+  const todayStr = toDateStr(new Date());
+  const dup = lessons.some(l=>l.email.toLowerCase()===member.email.toLowerCase()&&l.date===todayStr);
+  if (dup && !confirm('本日すでに記録があります。追加しますか？')) return;
+  const note = prompt('メモ（任意）','レッスン')||'レッスン';
+  showLoading('保存中...');
+  try {
+    await sbPost('lessons', {date:todayStr, member_id:member.id, name:member.name, email:member.email, calendar:'手動', note});
+    await fetchData(); showToast(`✓ ${member.name} のレッスンを記録しました`);
+  } catch(e) { console.error(e); showToast('⚠ 保存に失敗しました'); } finally { hideLoading(); }
+}
+
+// ── Edit Member ───────────────────────────────────────────────
+let editTargetId = null;
+function openEditModal(id) {
+  const m=members.find(m=>m.id===id); if(!m) return;
+  editTargetId=id;
+  document.getElementById('editName').value=m.name;
+  document.getElementById('editEmail').value=m.email;
+  document.getElementById('editPlan').value=m.plan;
+  document.getElementById('editStartDate').value=m.startDate;
+  document.getElementById('editNote').value=m.note||'';
+  document.getElementById('editModal').classList.add('show');
+}
+function closeEditModal() { document.getElementById('editModal').classList.remove('show'); }
+async function submitEditMember() {
+  const name=document.getElementById('editName').value.trim();
+  const email=document.getElementById('editEmail').value.trim().toLowerCase();
+  const plan=parseInt(document.getElementById('editPlan').value);
+  const startDate=document.getElementById('editStartDate').value;
+  const note=document.getElementById('editNote').value.trim();
+  if(!name||!email||!startDate){ alert('名前・メール・開始日は必須です'); return; }
+  if(members.some(m=>m.email.toLowerCase()===email&&m.id!==editTargetId)){ alert('同じメールの会員が存在します'); return; }
+  showLoading('保存中...');
+  try {
+    await sbPatch('members', editTargetId, {name, email, plan, start_date:startDate, note});
+    closeEditModal(); await fetchData(); showToast('✓ 会員情報を更新しました');
+  } catch(e) { console.error(e); showToast('⚠ 保存に失敗しました'); } finally { hideLoading(); }
+}
+
+// ── Add Member ────────────────────────────────────────────────
+function openAddModal() {
+  document.getElementById('newName').value='';
+  document.getElementById('newEmail').value='';
+  document.getElementById('newPlan').value='4';
+  document.getElementById('newStartDate').value=toDateStr(new Date());
+  document.getElementById('newNote').value='';
+  document.getElementById('addModal').classList.add('show');
+}
+function closeAddModal() { document.getElementById('addModal').classList.remove('show'); }
+async function submitAddMember() {
+  const name=document.getElementById('newName').value.trim();
+  const email=document.getElementById('newEmail').value.trim().toLowerCase();
+  const plan=parseInt(document.getElementById('newPlan').value);
+  const startDate=document.getElementById('newStartDate').value;
+  const note=document.getElementById('newNote').value.trim();
+  if(!name||!email||!startDate){ alert('名前・メール・開始日は必須です'); return; }
+  if(members.some(m=>m.email.toLowerCase()===email)){ alert('同じメールの会員が存在します'); return; }
+  showLoading('保存中...');
+  try {
+    const rows = await sbPost('members', {name, email, plan, start_date:startDate, carry_over:0, note});
+    closeAddModal(); await fetchData();
+    if(rows&&rows[0]) selectMember(rows[0].id);
+    showToast('✓ 会員を追加しました');
+  } catch(e) { console.error(e); showToast('⚠ 保存に失敗しました'); } finally { hideLoading(); }
+}
+
+// ── Init ──────────────────────────────────────────────────────
+document.getElementById('newStartDate').value = toDateStr(new Date());
+fetchData();
+</script>
+</body>
+</html>
