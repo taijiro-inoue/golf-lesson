@@ -213,6 +213,94 @@ header {
 .tc-badge.low { background: var(--sf-error-bg);   color: var(--sf-error); }
 .today-empty  { padding: 32px 16px; text-align: center; color: var(--sf-text-3); font-size: 13px; }
 
+/* Alert section in today */
+.today-section-title {
+  padding: 10px 16px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--sf-text-3);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  border-bottom: 1px solid var(--sf-border);
+}
+.alert-card {
+  background: var(--sf-error-bg);
+  border: 1px solid #f5c6cb;
+  border-left: 4px solid var(--sf-error);
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+}
+.alert-card.warn {
+  background: var(--sf-warning-bg);
+  border-color: #ffe0a0;
+  border-left-color: var(--sf-warning);
+}
+.alert-card .ac-name { font-size: 13px; font-weight: 700; color: var(--sf-text); }
+.alert-card .ac-meta { font-size: 11px; color: var(--sf-text-3); margin-top: 2px; }
+
+/* Revenue summary card */
+.revenue-card {
+  background: var(--sf-white);
+  border: 1px solid var(--sf-border);
+  border-radius: 4px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+.revenue-title { font-size: 11px; font-weight: 700; color: var(--sf-text-3); text-transform: uppercase; letter-spacing:.06em; margin-bottom: 10px; }
+.revenue-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.revenue-item  { text-align: center; }
+.revenue-item .rv { font-size: 18px; font-weight: 800; color: var(--sf-navy); line-height: 1; }
+.revenue-item .rl { font-size: 10px; color: var(--sf-text-3); margin-top: 3px; }
+
+/* Pack progress bar */
+.pack-progress { margin-top: 8px; }
+.pack-progress-bar {
+  height: 6px;
+  background: var(--sf-border);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.pack-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--sf-blue);
+  transition: width .3s;
+}
+.pack-progress-label { font-size: 11px; color: var(--sf-text-3); display: flex; justify-content: space-between; }
+
+/* LINE message modal */
+.line-msg-box {
+  background: #f0f9ee;
+  border: 1px solid #b7dfb0;
+  border-radius: 8px;
+  padding: 14px;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #1a1a1a;
+  margin-bottom: 12px;
+}
+.btn-line {
+  background: #06C755;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn-line:hover { background: #05b34c; }
+
 /* Member list panel */
 #panelMembers { display: none; flex-direction: column; flex: 1; overflow: hidden; }
 .list-toolbar {
@@ -788,6 +876,28 @@ header {
   </div>
 </div>
 
+<!-- LINE Message Modal -->
+<div class="modal-overlay" id="lineModal">
+  <div class="sf-modal" style="width:480px;">
+    <div class="sf-modal-header" style="background:#06C755;">
+      💬 LINEメッセージ生成
+      <button class="sf-modal-close" onclick="closeLineModal()">✕</button>
+    </div>
+    <div class="sf-modal-body">
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+        <button class="btn-outline" style="font-size:12px;" onclick="genLineMsg('reminder')">残数リマインド</button>
+        <button class="btn-outline" style="font-size:12px;" onclick="genLineMsg('renewal')">更新のお知らせ</button>
+        <button class="btn-outline" style="font-size:12px;" onclick="genLineMsg('zerorem')">残数0のご案内</button>
+      </div>
+      <div class="line-msg-box" id="lineMsgBox">上のボタンでメッセージを生成してください</div>
+    </div>
+    <div class="sf-modal-footer">
+      <button class="btn-cancel" onclick="closeLineModal()">閉じる</button>
+      <button class="btn-line" onclick="copyLineMsg()">📋 コピー</button>
+    </div>
+  </div>
+</div>
+
 <!-- Add Member Modal -->
 <div class="modal-overlay" id="addModal">
   <div class="sf-modal">
@@ -962,6 +1072,22 @@ function renderToday() {
   const d = new Date();
   const dateLabel = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${'日月火水木金土'[d.getDay()]}）`;
 
+  // 売上サマリー
+  const subTotal  = members.filter(m=>m.plan>0&&m.monthlyFee>0).reduce((s,m)=>s+m.monthlyFee,0);
+  const subCount  = members.filter(m=>m.plan>0).length;
+  const packCount = members.filter(m=>m.plan===0).length;
+  const alertMembers = members.filter(m=>{
+    const renewal = getNextRenewal(m);
+    const days = Math.ceil((parseDate(renewal)-new Date())/86400000);
+    const rem   = getTotalRemaining(m);
+    return days<=7 || rem===0;
+  }).map(m=>{
+    const renewal = getNextRenewal(m);
+    const days = Math.ceil((parseDate(renewal)-new Date())/86400000);
+    const rem   = getTotalRemaining(m);
+    return {m, days, rem};
+  }).sort((a,b)=>a.days-b.days);
+
   // カレンダー連携済み：当日の予約
   const todayLessons = lessons.filter(l=>l.date===todayStr);
   const seen = new Set(), todayMembers = [];
@@ -969,39 +1095,71 @@ function renderToday() {
     if (!seen.has(l.email)) {
       seen.add(l.email);
       const m = members.find(m=>m.email.toLowerCase()===l.email.toLowerCase());
-      if (m) todayMembers.push({member:m, lesson:l, fromCal:true});
+      if (m) todayMembers.push({member:m, lesson:l});
     }
   }
-
-  // カレンダーデータなし → 残数がある全会員を残数少ない順で表示
   const useAllMembers = todayMembers.length === 0;
   let displayList = todayMembers;
   if (useAllMembers) {
     displayList = members
-      .map(m=>({ member:m, lesson:null, fromCal:false }))
+      .map(m=>({member:m, lesson:null}))
       .filter(({member:m})=>getTotalRemaining(m)>0)
       .sort((a,b)=>getTotalRemaining(a.member)-getTotalRemaining(b.member));
   }
 
   let html = `<div class="today-header">
     <div class="today-date">${dateLabel}</div>
-    <div class="today-title">${useAllMembers?'残数あり会員（残数少ない順）':'本日のレッスン'}</div>
-  </div><div class="today-cards">`;
+    <div class="today-title">ダッシュボード</div>
+  </div>
+  <div class="today-cards">
 
+    <!-- 売上サマリー -->
+    <div class="revenue-card">
+      <div class="revenue-title">📊 今月の売上サマリー</div>
+      <div class="revenue-grid">
+        <div class="revenue-item"><div class="rv">¥${(subTotal/10000).toFixed(1)}万</div><div class="rl">サブスク売上/月</div></div>
+        <div class="revenue-item"><div class="rv">${subCount}名</div><div class="rl">サブスク会員</div></div>
+        <div class="revenue-item"><div class="rv">${packCount}名</div><div class="rl">パック会員</div></div>
+        <div class="revenue-item"><div class="rv">${members.length}名</div><div class="rl">会員総数</div></div>
+      </div>
+    </div>`;
+
+  // 更新間近・残数0アラート
+  if (alertMembers.length) {
+    html += `<div class="today-section-title">⚠ 要確認（更新7日以内 / 残数0）</div>`;
+    html += alertMembers.map(({m,days,rem})=>{
+      const isZero = rem===0;
+      const renewal = getNextRenewal(m);
+      const needed  = m.plan>0 ? Math.max(0, m.plan - getCurrentPeriod(m).used) : 0;
+      return `<div class="alert-card ${isZero?'':'warn'}" onclick="switchTab('members');selectMember(${m.id})">
+        <div>
+          <div class="ac-name">${m.name}</div>
+          <div class="ac-meta">
+            ${isZero?'⛔ 残数0回':''}
+            ${days<=7?`🔔 更新まであと${days}日（${formatDate(renewal)}）`:''}
+            ${needed>0?`　📅 あと${needed}回予約必要`:''}
+          </div>
+        </div>
+        <span class="plan-pill">${m.plan===0?'パック':`月${m.plan}回`}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // 本日レッスン or 残数あり会員
+  html += `<div class="today-section-title">${useAllMembers?'残数あり会員（残数少ない順）':'本日のレッスン'}</div>`;
   if (!displayList.length) {
-    html += `<div class="today-empty">${useAllMembers?'残数がある会員はいません':'本日の予約はありません'}</div>`;
+    html += `<div class="today-empty">残数がある会員はいません</div>`;
   } else {
     html += displayList.map(({member:m, lesson:l})=>{
       const rem = getTotalRemaining(m);
       const bc = rem<=1?'low':'ok';
-      const bt = rem<=0?'残り0回':`残り ${rem} 回`;
-      const meta = l ? `${l.calendar||''}　${l.note||''}` : `${m.plan===0?'パック':`月${m.plan}回`}`;
+      const meta = l ? `${l.calendar||''} ${l.note||''}` : `${m.plan===0?'パック':`月${m.plan}回`}`;
       const usedToday = lessons.some(x=>x.email.toLowerCase()===m.email.toLowerCase()&&x.date===todayStr);
       return `<div class="today-card" style="${usedToday?'border-left-color:var(--sf-success)':''}">
         <div class="today-card-info">
           <div class="tc-name">${m.name}${usedToday?' <span style="font-size:10px;color:var(--sf-success);font-weight:700">✓使用済</span>':''}</div>
           <div class="tc-meta">${meta}</div>
-          <span class="tc-badge ${bc}">${bt}</span>
+          <span class="tc-badge ${bc}">残り${rem}回</span>
         </div>
         <button class="btn-primary" style="padding:6px 12px;font-size:12px;" onclick="useLessonToday(${m.id})" ${rem<=0?'disabled':''}>使用</button>
       </div>`;
@@ -1155,6 +1313,7 @@ function renderDetail() {
 
       <div class="action-bar">
         <button class="btn-primary" onclick="useLesson(${member.id})" ${remaining<=0?'disabled':''}>⛳ レッスンを使用する（−1回）</button>
+        <button class="btn-line" onclick="openLineModal(${member.id})">💬 LINEメッセージ生成</button>
         <button class="btn-ghost" onclick="fetchData()">↺ 最新データに更新</button>
       </div>
 
@@ -1167,6 +1326,20 @@ function renderDetail() {
             <div class="field-item"><label>プラン</label><div class="fv">${member.plan===0?'レッスンパック（月次付与なし）':`月${member.plan}回`}</div></div>
             <div class="field-item"><label>契約開始日</label><div class="fv">${formatDate(member.startDate)}</div></div>
             <div class="field-item" style="grid-column:1/-1"><label>備考</label><div class="fv note-text">${member.note||'—'}</div></div>
+            ${(()=>{
+              if (member.plan>0) return '';
+              const match = (member.note||'').match(/残(\d+)\/(\d+)/);
+              if (!match) return '';
+              const total = parseInt(match[2]);
+              const pct = Math.round(remaining/total*100);
+              return `<div class="field-item" style="grid-column:1/-1">
+                <label>パック残数</label>
+                <div class="pack-progress">
+                  <div class="pack-progress-label"><span>${remaining}回 残り</span><span>${total - remaining}回 使用済 / ${total}回</span></div>
+                  <div class="pack-progress-bar"><div class="pack-progress-fill" style="width:${pct}%"></div></div>
+                </div>
+              </div>`;
+            })()}
           </div>
         </div>
       </div>
@@ -1323,6 +1496,37 @@ async function submitAddMember() {
     if(rows&&rows[0]) selectMember(rows[0].id);
     showToast('✓ 会員を追加しました');
   } catch(e) { console.error(e); showToast('⚠ 保存に失敗しました'); } finally { hideLoading(); }
+}
+
+// ── LINE Message ─────────────────────────────────────────────
+let lineTargetId = null;
+function openLineModal(id) {
+  lineTargetId = id;
+  document.getElementById('lineMsgBox').textContent = '上のボタンでメッセージを生成してください';
+  document.getElementById('lineModal').classList.add('show');
+}
+function closeLineModal() { document.getElementById('lineModal').classList.remove('show'); }
+function genLineMsg(type) {
+  const m = members.find(m=>m.id===lineTargetId); if(!m) return;
+  const rem     = getTotalRemaining(m);
+  const renewal = getNextRenewal(m);
+  const days    = Math.ceil((parseDate(renewal)-new Date())/86400000);
+  const cur     = getCurrentPeriod(m);
+  const needed  = m.plan>0 ? Math.max(0, m.plan - cur.used) : 0;
+  const planStr = m.plan===0 ? 'レッスンパック' : `月${m.plan}回プラン`;
+  let msg = '';
+  if (type==='reminder') {
+    msg = `${m.name}さん、こんにちは！ルイコーチです🏌️\n\n現在のレッスン残数は【${rem}回】です。\n更新日は ${formatDate(renewal)}（あと${days}日）となっております。\n${needed>0?`更新前にあと${needed}回のご予約をお待ちしております！\n`:'今月分はすべてご予約済みです✨\n'}\nご不明な点はお気軽にご連絡ください😊`;
+  } else if (type==='renewal') {
+    msg = `${m.name}さん、こんにちは！ルイコーチです🏌️\n\n${formatDate(renewal)}に${planStr}の更新となります。\n引き続きよろしくお願いいたします！\n\n来月も ${m.plan>0?m.plan+'回分':'パック残数分'} のレッスンをご利用いただけます。\nご予約はお早めに📅`;
+  } else if (type==='zerorem') {
+    msg = `${m.name}さん、こんにちは！ルイコーチです🏌️\n\n現在のレッスン残数が【0回】となっております。\n${m.plan>0?`次回更新日（${formatDate(renewal)}）まであと${days}日です。`:'レッスンパックの追加をご検討ください。'}\n\nご不明な点はお気軽にご連絡ください😊`;
+  }
+  document.getElementById('lineMsgBox').textContent = msg;
+}
+function copyLineMsg() {
+  const txt = document.getElementById('lineMsgBox').textContent;
+  navigator.clipboard.writeText(txt).then(()=>showToast('✓ コピーしました'));
 }
 
 // ── Init ──────────────────────────────────────────────────────
