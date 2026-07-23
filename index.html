@@ -1153,12 +1153,15 @@ function renderToday() {
     html += displayList.map(({member:m, lesson:l})=>{
       const rem = getTotalRemaining(m);
       const bc = rem<=1?'low':'ok';
-      const meta = l ? `${l.calendar||''} ${l.note||''}` : `${m.plan===0?'パック':`月${m.plan}回`}`;
+      const planLabel = m.plan===0?'パック':`月${m.plan}回`;
+      const meta = l ? `${planLabel}${l.calendar?' · '+l.calendar:''}` : planLabel;
       const usedToday = lessons.some(x=>x.email.toLowerCase()===m.email.toLowerCase()&&x.date===todayStr);
+      const cur = computePeriods(m).slice(-1)[0];
+      const periodStr = cur ? `${formatDate(cur.start)} 〜 ${formatDate(cur.end)}` : '';
       return `<div class="today-card" style="${usedToday?'border-left-color:var(--sf-success)':''}">
         <div class="today-card-info">
           <div class="tc-name">${m.name}${usedToday?' <span style="font-size:10px;color:var(--sf-success);font-weight:700">✓使用済</span>':''}</div>
-          <div class="tc-meta">${meta}</div>
+          <div class="tc-meta">${meta}${periodStr?' · '+periodStr:''}</div>
           <span class="tc-badge ${bc}">残り${rem}回</span>
         </div>
         <button class="btn-primary" style="padding:6px 12px;font-size:12px;" onclick="useLessonToday(${m.id})" ${rem<=0?'disabled':''}>使用</button>
