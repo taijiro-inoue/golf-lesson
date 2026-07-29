@@ -255,24 +255,59 @@ input,select,textarea{font-family:inherit}
 <!-- Add Member Modal -->
 <div class="modal-overlay" id="addModal">
   <div class="sf-modal">
-    <div class="sf-modal-header">新規会員を追加<button class="sf-modal-close" onclick="closeAddModal()">✕</button></div>
+    <div class="sf-modal-header" id="addModalTitle">新規登録<button class="sf-modal-close" onclick="closeAddModal()">✕</button></div>
     <div class="sf-modal-body">
-      <div class="form-group"><label>お名前 *</label><input type="text" id="newName"></div>
-      <div class="form-group"><label>メールアドレス *</label><input type="email" id="newEmail"></div>
-      <div class="form-group"><label>プラン</label>
-        <select id="newPlan">
-          <option value="0">レッスンパック</option>
-          <option value="2">月2回</option><option value="4" selected>月4回</option>
-          <option value="6">月6回</option><option value="8">月8回</option>
+      <div class="form-group"><label>種別 *</label>
+        <select id="newMemberType" onchange="toggleAddModalFields()">
+          <option value="trial">体験レッスン（新規見込み）</option>
+          <option value="subscription">サブスク会員</option>
         </select>
       </div>
-      <div class="form-group"><label>契約開始日 *</label><input type="date" id="newStartDate"></div>
-      <div class="form-group"><label>月額料金 (¥)</label><input type="number" id="newMonthlyFee" placeholder="0"></div>
+      <div class="form-group"><label>お名前 *</label><input type="text" id="newName"></div>
+      <div class="form-group"><label>メールアドレス</label><input type="email" id="newEmail"></div>
+      <div id="trialFields">
+        <div class="form-group"><label>体験レッスン日 *</label><input type="date" id="newTrialDate"></div>
+      </div>
+      <div id="subscriptionFields" style="display:none">
+        <div class="form-group"><label>プラン</label>
+          <select id="newPlan">
+            <option value="0">レッスンパック</option>
+            <option value="2">月2回</option><option value="4" selected>月4回</option>
+            <option value="6">月6回</option><option value="8">月8回</option>
+          </select>
+        </div>
+        <div class="form-group"><label>契約開始日 *</label><input type="date" id="newStartDate"></div>
+        <div class="form-group"><label>月額料金 (¥)</label><input type="number" id="newMonthlyFee" placeholder="0"></div>
+      </div>
       <div class="form-group"><label>備考</label><input type="text" id="newNote"></div>
     </div>
     <div class="sf-modal-footer">
       <button class="btn btn-outline" onclick="closeAddModal()">キャンセル</button>
-      <button class="btn btn-primary" onclick="submitAddMember()">追加</button>
+      <button class="btn btn-primary" onclick="submitAddMember()">登録</button>
+    </div>
+  </div>
+</div>
+
+<!-- Convert to Subscription Modal -->
+<div class="modal-overlay" id="convertModal">
+  <div class="sf-modal">
+    <div class="sf-modal-header">サブスクへ移行<button class="sf-modal-close" onclick="document.getElementById('convertModal').classList.remove('show')">✕</button></div>
+    <div class="sf-modal-body">
+      <div style="background:var(--g0);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:var(--g7)">
+        🎉 体験から正式会員へ移行します
+      </div>
+      <div class="form-group"><label>プラン</label>
+        <select id="convertPlan">
+          <option value="2">月2回</option><option value="4" selected>月4回</option>
+          <option value="6">月6回</option><option value="8">月8回</option>
+        </select>
+      </div>
+      <div class="form-group"><label>契約開始日 *</label><input type="date" id="convertStartDate"></div>
+      <div class="form-group"><label>月額料金 (¥)</label><input type="number" id="convertFee" placeholder="0"></div>
+    </div>
+    <div class="sf-modal-footer">
+      <button class="btn btn-outline" onclick="document.getElementById('convertModal').classList.remove('show')">キャンセル</button>
+      <button class="btn btn-primary" onclick="submitConvert()">✓ 移行を確定</button>
     </div>
   </div>
 </div>
@@ -321,7 +356,7 @@ async function sbPatch(t, id, b) { const r=await fetch(`${SUPABASE_URL}/rest/v1/
 // ── State ────────────────────────────────────────────────────────
 let members=[], lessons=[], payments=[], currentView='dashboard', selectedMemberId=null, memberFilter='all', memberSearch='', editTargetId=null, lineTargetId=null;
 
-function normMember(r){ return {id:r.id,name:r.name,email:r.email,plan:r.plan||0,startDate:r.start_date,carryOver:r.carry_over||0,note:r.note||'',monthlyFee:r.monthly_fee||0,lineId:r.line_id||'',instagramId:r.instagram_id||'',status:r.status||'active'}; }
+function normMember(r){ return {id:r.id,name:r.name,email:r.email,plan:r.plan||0,startDate:r.start_date,carryOver:r.carry_over||0,note:r.note||'',monthlyFee:r.monthly_fee||0,lineId:r.line_id||'',instagramId:r.instagram_id||'',status:r.status||'active',memberType:r.member_type||'subscription',trialDate:r.trial_date||'',convertedAt:r.converted_at||''}; }
 function normLesson(r){ return {id:r.id,date:r.date,memberId:r.member_id,name:r.name,email:r.email,calendar:r.calendar||'',note:r.note||''}; }
 function normPayment(r){ return {id:r.id,memberId:r.member_id,yearMonth:r.year_month,paidAt:r.paid_at,amount:r.amount||0,note:r.note||''}; }
 
@@ -431,7 +466,10 @@ function renderDashboard(){
   const dow = ['日','月','火','水','木','金','土'];
   const dateLabel = `${today.getFullYear()}年${today.getMonth()+1}月${today.getDate()}日（${dow[today.getDay()]}）`;
 
-  const activeMembers = members.filter(m=>m.status!=='inactive');
+  const activeMembers = members.filter(m=>m.status!=='inactive'&&m.memberType==='subscription');
+  const trialMembers = members.filter(m=>m.memberType==='trial');
+  const convertedThisMonth = members.filter(m=>m.convertedAt&&m.convertedAt.startsWith(ym)).length;
+  const convRate = trialMembers.length+convertedThisMonth>0 ? Math.round(convertedThisMonth/(trialMembers.length+convertedThisMonth)*100) : 0;
   const totalRem = activeMembers.reduce((s,m)=>s+getTotalRemaining(m),0);
   const monthFee = activeMembers.filter(m=>m.plan>0).reduce((s,m)=>s+m.monthlyFee,0);
   const unpaid = activeMembers.filter(m=>m.plan>0&&m.monthlyFee>0&&!getPaymentStatus(m.id,ym)).length;
@@ -469,14 +507,14 @@ function renderDashboard(){
       <div class="kpi-sub">定員 ${totalCapToday} 枠</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">受講中会員数<span class="kpi-icon">👥</span></div>
+      <div class="kpi-label">サブスク会員数<span class="kpi-icon">👥</span></div>
       <div class="kpi-value">${activeMembers.length}</div>
-      <div class="kpi-sub up">アクティブ</div>
+      <div class="kpi-sub up">体験中 ${trialMembers.length}名</div>
     </div>
-    <div class="kpi-card">
-      <div class="kpi-label">残回数 合計<span class="kpi-icon">⛳</span></div>
-      <div class="kpi-value">${totalRem}</div>
-      <div class="kpi-sub">全会員合計</div>
+    <div class="kpi-card" style="cursor:pointer" onclick="navigate('members');memberFilter='trial';render()">
+      <div class="kpi-label">体験→転換率<span class="kpi-icon">🔄</span></div>
+      <div class="kpi-value" style="color:${convRate>=50?'var(--success)':convRate>=30?'var(--amber)':'var(--red)'}">${convRate}<span style="font-size:16px">%</span></div>
+      <div class="kpi-sub">今月 ${convertedThisMonth}名転換</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">未払い件数<span class="kpi-icon">⚠️</span></div>
@@ -494,6 +532,29 @@ function renderDashboard(){
       <div class="kpi-sub ${occupancy>=80?'up':occupancy>=50?'':'dn'}">本日</div>
     </div>
   </div>
+
+  <!-- Trial pipeline -->
+  ${trialMembers.length>0?`<div class="card" style="margin-bottom:18px;border-left:3px solid var(--amber)">
+    <div class="card-header">
+      <div class="card-title">🌱 体験中の見込み顧客<span class="count-chip" style="background:var(--amber-bg);color:var(--amber)">${trialMembers.length}名</span></div>
+      <button class="btn btn-outline btn-sm" onclick="navigate('members');memberFilter='trial';render()">一覧を見る →</button>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>お名前</th><th>体験日</th><th>経過日数</th><th></th></tr></thead>
+      <tbody>
+        ${trialMembers.slice(0,3).map(m=>{
+          const td=m.trialDate?Math.ceil((new Date()-parseDate(m.trialDate))/86400000):null;
+          return `<tr onclick="navigate('member_detail',${m.id})">
+            <td class="name-cell">${m.name}</td>
+            <td class="text-sm">${m.trialDate?formatDate(m.trialDate):'—'}</td>
+            <td>${td!==null?`<span class="badge ${td>14?'red':td>7?'amber':'blue'}">${td}日後</span>`:'—'}</td>
+            <td><button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openConvertModal(${m.id})">サブスクへ移行</button></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`:''}
+
 
   <!-- Today + Cancel wait -->
   <div class="dash-grid">
@@ -672,7 +733,8 @@ function renderMembers(){
   const today=new Date();
   const ym=currentYearMonth();
   let list=members.filter(m=>{
-    if(memberFilter==='active') return m.status==='active';
+    if(memberFilter==='subscription') return m.memberType==='subscription'&&m.status==='active';
+    if(memberFilter==='trial') return m.memberType==='trial';
     if(memberFilter==='inactive') return m.status==='inactive';
     if(memberFilter==='alert'){
       const ren=getNextRenewal(m); if(!ren) return false;
@@ -688,7 +750,7 @@ function renderMembers(){
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
     <div>
       <div class="filter-bar" style="margin-bottom:0">
-        ${[['all','すべて'],['active','受講中'],['inactive','休止中'],['alert','要確認'],['unpaid','未払い']].map(([v,l])=>
+        ${[['all','すべて'],['subscription','サブスク'],['trial','体験中'],['inactive','休止中'],['alert','要確認'],['unpaid','未払い']].map(([v,l])=>
           `<div class="filter-chip ${memberFilter===v?'active':''}" onclick="memberFilter='${v}';render()">${l}</div>`
         ).join('')}
       </div>
@@ -756,7 +818,8 @@ function renderMemberDetail(){
           ${m.lineId||m.instagramId?`<div style="font-size:12px;color:var(--gray400);margin-top:2px">${m.lineId?`💬 ${m.lineId}`:''}${m.lineId&&m.instagramId?' · ':''}${m.instagramId?`📸 ${m.instagramId}`:''}</div>`:''}
         </div>
       </div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${m.memberType==='trial'?`<button class="btn btn-primary btn-sm" style="background:var(--amber)" onclick="openConvertModal(${m.id})">🔄 サブスクへ移行</button>`:''}
         <button class="btn btn-outline btn-sm" onclick="openHistoryModal(${m.id})">🕐 履歴</button>
         <button class="btn btn-outline btn-sm" onclick="openLineModal(${m.id})">💬 LINE</button>
         <button class="btn btn-primary btn-sm" onclick="openEditModal(${m.id})">✏ 編集</button>
@@ -1049,32 +1112,77 @@ async function submitEditMember(){
   } catch(e){ console.error(e); showToast('⚠ 保存に失敗しました'); } finally { hideLoading(); }
 }
 
+function toggleAddModalFields(){
+  const type=document.getElementById('newMemberType').value;
+  document.getElementById('trialFields').style.display=type==='trial'?'':'none';
+  document.getElementById('subscriptionFields').style.display=type==='subscription'?'':'none';
+  document.getElementById('addModalTitle').childNodes[0].textContent=type==='trial'?'体験レッスン登録':'新規サブスク会員登録';
+}
 function openAddModal(){
+  document.getElementById('newMemberType').value='trial';
   document.getElementById('newName').value='';
   document.getElementById('newEmail').value='';
+  document.getElementById('newTrialDate').value=toDateStr(new Date());
   document.getElementById('newPlan').value='4';
   document.getElementById('newStartDate').value=toDateStr(new Date());
   document.getElementById('newMonthlyFee').value='';
   document.getElementById('newNote').value='';
+  toggleAddModalFields();
   document.getElementById('addModal').classList.add('show');
 }
 function closeAddModal(){ document.getElementById('addModal').classList.remove('show'); }
 async function submitAddMember(){
   const name=document.getElementById('newName').value.trim();
   const email=document.getElementById('newEmail').value.trim().toLowerCase();
-  const plan=parseInt(document.getElementById('newPlan').value);
-  const startDate=document.getElementById('newStartDate').value;
-  const monthlyFee=parseInt(document.getElementById('newMonthlyFee').value)||0;
   const note=document.getElementById('newNote').value.trim();
-  if(!name||!email||!startDate){ alert('名前・メール・開始日は必須です'); return; }
-  if(members.some(m=>m.email.toLowerCase()===email)){ alert('同じメールの会員が存在します'); return; }
+  const memberType=document.getElementById('newMemberType').value;
+  if(!name){ alert('名前は必須です'); return; }
   showLoading();
   try {
-    const rows=await sbPost('members',{name,email,plan,start_date:startDate,carry_over:0,monthly_fee:monthlyFee,note});
+    let body={name,email:email||`trial_${Date.now()}@noemail.local`,note,member_type:memberType,plan:0,carry_over:0,start_date:toDateStr(new Date())};
+    if(memberType==='trial'){
+      body.trial_date=document.getElementById('newTrialDate').value;
+    } else {
+      const plan=parseInt(document.getElementById('newPlan').value);
+      const startDate=document.getElementById('newStartDate').value;
+      const monthlyFee=parseInt(document.getElementById('newMonthlyFee').value)||0;
+      if(!startDate){ alert('開始日は必須です'); hideLoading(); return; }
+      body={...body,plan,start_date:startDate,monthly_fee:monthlyFee};
+    }
+    const rows=await sbPost('members',body);
     closeAddModal(); await fetchData();
     if(rows&&rows[0]) navigate('member_detail',rows[0].id);
-    showToast('✓ 会員を追加しました');
+    showToast(memberType==='trial'?'✓ 体験会員を登録しました':'✓ 会員を追加しました');
   } catch(e){ console.error(e); showToast('⚠ 保存に失敗しました'); } finally { hideLoading(); }
+}
+
+// ── Convert trial → subscription ─────────────────────────────────
+let convertTargetId=null;
+function openConvertModal(id){
+  convertTargetId=id;
+  document.getElementById('convertStartDate').value=toDateStr(new Date());
+  document.getElementById('convertFee').value='';
+  document.getElementById('convertPlan').value='4';
+  document.getElementById('convertModal').classList.add('show');
+}
+async function submitConvert(){
+  const m=members.find(x=>x.id===convertTargetId); if(!m) return;
+  const plan=parseInt(document.getElementById('convertPlan').value);
+  const startDate=document.getElementById('convertStartDate').value;
+  const fee=parseInt(document.getElementById('convertFee').value)||0;
+  if(!startDate){ alert('契約開始日は必須です'); return; }
+  showLoading();
+  try {
+    await sbPatch('members',convertTargetId,{
+      member_type:'subscription',plan,start_date:startDate,monthly_fee:fee,
+      converted_at:toDateStr(new Date()),status:'active'
+    });
+    await sbPost('edit_history',{table_name:'members',record_id:convertTargetId,field_name:'転換',old_value:'体験',new_value:'サブスク',member_name:m.name});
+    document.getElementById('convertModal').classList.remove('show');
+    await fetchData();
+    showToast(`🎉 ${m.name}さんがサブスクに移行しました！`);
+    navigate('member_detail',convertTargetId);
+  } catch(e){ console.error(e); showToast('⚠ エラーが発生しました'); } finally { hideLoading(); }
 }
 
 async function useLessonToday(id){
