@@ -756,30 +756,150 @@ function renderCalendarTable(compact=false){
 }
 
 function renderCalendar(){
+  const today = new Date();
+  const todayStr = toDateStr(today);
+  const DOW = ['日','月','火','水','木','金','土'];
+
+  // 今週月曜〜日曜
+  const dow = today.getDay();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - (dow===0?6:dow-1));
+  const week = Array.from({length:7},(_,i)=>{ const d=new Date(monday); d.setDate(monday.getDate()+i); return d; });
+  const weekStrs = week.map(d=>toDateStr(d));
+
+  // アクティブなサブスク会員のみ
+  const activeMembers = members
+    .filter(m=>m.memberType==='subscription'&&m.status==='active')
+    .sort((a,b)=>getTotalRemaining(a)-getTotalRemaining(b));
+
+  // 凡例
+  const legend = `<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--gray500);margin-top:10px">
+    <span><span style="display:inline-block;width:10px;height:10px;background:var(--g5);border-radius:50%;margin-right:4px"></span>受講済</span>
+    <span><span style="display:inline-block;width:10px;height:10px;border:2px dashed var(--gray300);border-radius:50%;margin-right:4px"></span>未予約</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:var(--red);border-radius:50%;margin-right:4px;opacity:.7"></span>残数0</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:var(--amber);border-radius:50%;margin-right:4px;opacity:.8"></span>残数1〜2</span>
+  </div>`;
+
+  // ヘッダー
+  const headers = week.map((d,i)=>{
+    const ds=weekStrs[i];
+    const isToday=ds===todayStr;
+    const isPast=d<today&&!isToday;
+    return `<th style="min-width:68px;text-align:center;${isToday?'color:var(--g6);font-weight:800':isPast?'color:var(--gray300)':''}">
+      <div>${DOW[d.getDay()]}</div>
+      <div style="font-size:15px;font-weight:700">${d.getDate()}</div>
+      ${isToday?'<div style="width:6px;height:6px;background:var(--g5);border-radius:50%;margin:2px auto 0"></div>':''}
+    </th>`;
+  }).join('');
+
+  // 会員行
+  const rows = activeMembers.map(m=>{
+    const cur = getCurrentPeriod(m);
+    const rem = getTotalRemaining(m);
+    const remClass = rem===0?'color:var(--red);font-weight:800':rem<=2?'color:var(--amber);font-weight:700':'color:var(--gray700)';
+    const usedThisPeriod = cur ? cur.used : 0;
+    const allotted = cur ? cur.allotted : 0;
+
+    const cells = week.map((d,i)=>{
+      const ds = weekStrs[i];
+      const isPast = d<today && ds!==todayStr;
+      const isToday = ds===todayStr;
+      // この日のレッスン
+      const hasLesson = lessons.some(l=>l.email.toLowerCase()===m.email.toLowerCase()&&l.date===ds);
+      // 期間外かチェック
+      const inPeriod = cur && ds>=cur.start && ds<cur.end;
+
+      let cell='';
+      if(!inPeriod){
+        cell=`<div style="width:32px;height:32px;margin:auto;background:var(--gray100);border-radius:6px"></div>`;
+      } else if(hasLesson){
+        cell=`<div style="width:32px;height:32px;margin:auto;background:var(--g5);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px" title="${formatDate(ds)} 受講済">✓</div>`;
+      } else if(isPast){
+        cell=`<div style="width:32px;height:32px;margin:auto;border:2px dashed var(--gray200);border-radius:50%"></div>`;
+      } else {
+        cell=`<div style="width:32px;height:32px;margin:auto;border:2px dashed ${rem<=0?'var(--red)':'var(--gray300)'};border-radius:50%;${isToday?'border-color:var(--g5)':''}"></div>`;
+      }
+      return `<td style="text-align:center;padding:6px 2px;${isToday?'background:var(--g0)':''}">${cell}</td>`;
+    }).join('');
+
+    return `<tr onclick="navigate('member_detail',${m.id})" style="cursor:pointer">
+      <td style="padding:8px 12px;border-bottom:1px solid var(--gray100);min-width:130px">
+        <div style="font-weight:600;font-size:13px;color:var(--gray900)">${m.name}</div>
+        <div style="font-size:11px;color:var(--gray400);margin-top:1px">${m.plan===0?'パック':`月${m.plan}回`} · <span style="${remClass}">残${rem}回</span></div>
+        ${cur?`<div style="margin-top:4px"><div style="height:4px;background:var(--gray200);border-radius:2px;width:80px"><div style="height:4px;background:${rem===0?'var(--red)':rem<=2?'var(--amber)':'var(--g5)'};border-radius:2px;width:${allotted>0?Math.min(100,usedThisPeriod/allotted*100):0}%"></div></div></div>`:''}
+      </td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  // 未予約アラート（今週残日数で予約必要な人）
+  const needBook = activeMembers.filter(m=>{
+    const rem=getTotalRemaining(m);
+    const usedThisWeek=week.filter(d=>lessons.some(l=>l.email.toLowerCase()===m.email.toLowerCase()&&l.date===toDateStr(d))).length;
+    return rem>0&&usedThisWeek===0;
+  });
+
   return `
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-    <div style="display:flex;align-items:center;gap:8px">
-      <button class="btn btn-outline btn-sm">← 前週</button>
-      <span style="font-weight:700;font-size:14px">今週</span>
-      <button class="btn btn-outline btn-sm">次週 →</button>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+    <div>
+      <div style="font-size:16px;font-weight:800;color:var(--gray900)">今週の会員別レッスン状況</div>
+      <div style="font-size:12px;color:var(--gray500);margin-top:2px">${monday.getMonth()+1}/${monday.getDate()}（月）〜 ${week[6].getMonth()+1}/${week[6].getDate()}（日）</div>
     </div>
-    <div style="display:flex;gap:8px">
-      <select class="search-input" style="width:160px"><option>すべてのコーチ</option>${COACHES.map(c=>`<option>${c.name}</option>`).join('')}</select>
-      <select class="search-input" style="width:160px"><option>すべてのレッスン種別</option>${LESSON_TYPES.map(t=>`<option>${t}</option>`).join('')}</select>
-      <button class="btn btn-primary btn-sm">+ 新規予約</button>
-    </div>
+    <button class="btn btn-primary btn-sm" onclick="openAddModal()">+ 体験・新規登録</button>
   </div>
+
+  ${needBook.length>0?`<div class="alert-item warn" style="margin-bottom:14px">
+    <div class="alert-icon">📋</div>
+    <div class="alert-body">
+      <div class="alert-title">今週まだ未予約の会員が ${needBook.length} 名います</div>
+      <div class="alert-desc">${needBook.slice(0,5).map(m=>m.name).join('、')}${needBook.length>5?`他${needBook.length-5}名`:''}</div>
+    </div>
+  </div>`:''}
+
   <div class="card">
-    <div class="cal-wrap">
-      ${renderCalendarTable()}
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:var(--gray50);border-bottom:2px solid var(--gray200)">
+            <th style="padding:10px 12px;text-align:left;font-size:11px;color:var(--gray500);font-weight:700;min-width:130px">会員名 / 進捗</th>
+            ${headers}
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
     </div>
+    ${legend}
+    <div style="padding:8px 0 0;font-size:11px;color:var(--gray400)">※ 行をタップすると会員詳細に移動します</div>
   </div>
-  <div style="display:flex;align-items:center;gap:16px;margin-top:12px;font-size:11px;color:var(--gray500)">
-    <span>稼働率の目安：</span>
-    <span><span style="display:inline-block;width:12px;height:12px;background:#fef9c3;border-radius:2px;margin-right:4px"></span>〜50%</span>
-    <span><span style="display:inline-block;width:12px;height:12px;background:var(--success-bg);border-radius:2px;margin-right:4px"></span>51〜70%</span>
-    <span><span style="display:inline-block;width:12px;height:12px;background:#bbf7d0;border-radius:2px;margin-right:4px"></span>71〜90%</span>
-    <span><span style="display:inline-block;width:12px;height:12px;background:#fee2e2;border-radius:2px;margin-right:4px"></span>91〜満枠</span>
+
+  <!-- 期間別サマリー -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-header"><div class="card-title">📊 今月の使用状況サマリー</div></div>
+    <table class="data-table">
+      <thead><tr><th>会員名</th><th>期間</th><th>権利</th><th>使用</th><th>残</th><th>進捗</th><th>更新まで</th></tr></thead>
+      <tbody>
+        ${activeMembers.map(m=>{
+          const cur=getCurrentPeriod(m);
+          const rem=getTotalRemaining(m);
+          const ren=getNextRenewal(m);
+          const days=ren?Math.ceil((parseDate(ren)-today)/86400000):99;
+          const pct=cur&&cur.allotted>0?Math.min(100,Math.round(cur.used/cur.allotted*100)):0;
+          const bc=rem===0?'red':rem<=2?'amber':'green';
+          return `<tr onclick="navigate('member_detail',${m.id})" style="cursor:pointer">
+            <td class="name-cell">${m.name}</td>
+            <td class="text-xs text-muted">${cur?formatDateJP(cur.start)+'〜'+formatDateJP(cur.end):'-'}</td>
+            <td class="text-muted">${cur?cur.allotted:'-'}回</td>
+            <td>${cur?cur.used:'-'}回</td>
+            <td><span class="badge ${bc}">${rem}回</span></td>
+            <td><div style="display:flex;align-items:center;gap:6px">
+              <div style="width:60px;height:5px;background:var(--gray200);border-radius:3px"><div style="height:5px;background:${rem===0?'var(--red)':rem<=2?'var(--amber)':'var(--g5)'};border-radius:3px;width:${pct}%"></div></div>
+              <span class="text-xs text-muted">${pct}%</span>
+            </div></td>
+            <td class="text-xs ${days<=7?'':'text-muted'}" style="${days<=7?'color:var(--amber);font-weight:700':''}">${days}日</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
   </div>`;
 }
 
